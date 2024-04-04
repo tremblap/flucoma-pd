@@ -1390,11 +1390,12 @@ public:
 
     if (!x->mAutosize && ac != x->mListSize)
     {
-      object_warn(x, "bad input list size (%d), expect %d",ac,x->mListSize);
+      object_warn(x, "bad input list size (%d), expected %d",ac,x->mListSize);
       return;
     }
      
-    if (x->mAutosize) x->resizeListHandlers(ac);
+    if (x->mAutosize && isControlOutFollowsIn<typename Client::Client>) 
+      x->resizeListHandlers(ac);
     
     x->mListHandler(x, which, ac, av);
   }
