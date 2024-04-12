@@ -1454,12 +1454,16 @@ private:
     {
       long argCount{0};
       
-      if(isControlOutFollowsIn<typename Client::Client>)
+      if(isControlIn<typename Client::Client>)
       {
         mListSize = atom_getint(av);
-        numArgs -= 1;
-        av += 1;
-        ac--;
+        if(isControlOutFollowsIn<typename Client::Client>)
+        {
+          numArgs -= 1;
+          av += 1;
+          ac--;
+        std::cout << "iCoFi\n";
+        }
       }
 
       mParams.setPrimaryParameterValues(
