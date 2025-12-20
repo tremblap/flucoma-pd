@@ -98,8 +98,15 @@ typedef struct _fplot{
 
 static void fplot_draw(t_fplot* x, struct _glist *glist, int vis, int clean);
 
+static int fplot_canvas_ready(t_glist *glist){
+    t_canvas *cv = glist ? glist_getcanvas(glist) : NULL;
+    return cv ? cv->gl_havewindow : 0;
+}
+
 // ------------------------ draw inlet --------------------------------------------------------------------
 static void fplot_draw_io_let(t_fplot *x){
+    if(!fplot_canvas_ready(x->x_glist))
+        return;
     t_canvas *cv = glist_getcanvas(x->x_glist);
     int xpos = text_xpix(&x->x_obj, x->x_glist), ypos = text_ypix(&x->x_obj, x->x_glist);
     sys_vgui(".x%lx.c delete %lx_in\n", cv, x);
@@ -188,6 +195,8 @@ static void fplot_motion(t_fplot *x, t_floatarg dx, t_floatarg dy){
             pd_list(x->x_send->s_thing, &s_list, 2, at);
     } else if (x->x_clicktype == 1) {
         fplot_draw(x, x->x_glist, 1, 0);
+    } else if (x->x_clicktype == -1) {
+        x->x_clicktype == 0;
     }
 }
 
@@ -257,9 +266,16 @@ static void fplot_mouserelease(t_fplot* x){
             x->x_y_range = fabsf(x->x_y_s_temp - scaledY) * -1.0;
         }
 
-        x->x_clicktype = 0;
+        x->x_clicktype = -1;
         fplot_draw(x, x->x_glist, 1, 0);
-    }
+    } else x->x_clicktype = -1;
+
+    if (x->x_latch) {
+        t_symbol *mouseup = gensym("mouseup");
+        outlet_symbol(x->x_obj.ob_outlet, mouseup);
+        if(x->x_send != &s_ && x->x_send->s_thing)
+            pd_symbol(x->x_send->s_thing, mouseup);       
+    };
 }
 
 static void fplot_getrect(t_gobj *z, t_glist *glist, int *xp1, int *yp1, int *xp2, int *yp2){
@@ -306,11 +322,15 @@ static void fplot_delete(t_gobj *z, t_glist *glist){
 }
 
 static void fplot_erase(t_fplot* x, struct _glist *glist){
+    if(!fplot_canvas_ready(glist))
+        return;
     t_canvas *cv = glist_getcanvas(glist);
     sys_vgui(".x%lx.c delete %lx_frame\n", cv, x);
     sys_vgui(".x%lx.c delete %lx_points\n", cv, x);
     sys_vgui(".x%lx.c delete %lx_outline\n", cv, x);
     sys_vgui(".x%lx.c delete %lx_selframe\n", cv, x);
+    sys_vgui(".x%lx.c delete %lx_in\n", cv, x);
+    sys_vgui(".x%lx.c delete %lx_out\n", cv, x);
 }
 
 static void fplot_drawplot(t_fplot* x, t_canvas *cv, int clean){
@@ -347,6 +367,7 @@ static void fplot_drawplot(t_fplot* x, t_canvas *cv, int clean){
     }
     
     sys_vgui(".x%lx.c bind %lx_frame <ButtonRelease> {pdsend [concat %s _mouserelease \\;]}\n", cv, x, x->x_bindname->s_name);
+    sys_vgui(".x%lx.c bind %lx_points <ButtonRelease> {pdsend [concat %s _mouserelease \\;]}\n", cv, x, x->x_bindname->s_name);
 }
 
 static void fplot_outline(t_fplot *x, t_float f){
@@ -369,9 +390,11 @@ static void fplot_outline(t_fplot *x, t_float f){
 }
 
 static void fplot_draw(t_fplot* x, struct _glist *glist, int vis, int clean){
+    (void)vis;
+    if(!fplot_canvas_ready(glist))
+        return;
     t_canvas *cv = glist_getcanvas(glist);
-    int visible = (glist_isvisible(x->x_glist) && gobj_shouldvis((t_gobj *)x, x->x_glist));
-    if(visible || (_Bool)vis) fplot_drawplot(x, cv, clean);
+    fplot_drawplot(x, cv, clean);
 
     fplot_draw_io_let(x);
 }
@@ -392,8 +415,18 @@ static void fplot_save(t_gobj *z, t_binbuf *b){
 //------------------------------- METHODS --------------------------------------------
 void fplot_setpoints(t_fplot* x, t_symbol* name){
     x->x_binbuf = text_getbufbyname(name);
-    
+
+    if(!x->x_binbuf){
+        pd_error(x, "[fluid.plotter]: couldn't find text buffer '%s' for setpoints", name->s_name);
+        return;
+    }
+
     int natom = binbuf_getnatom(x->x_binbuf);
+
+    if(natom % 4 != 0){
+        pd_error(x, "[fluid.plotter]: wrong number of atoms (%d) for setpoints, expected multiples of 4", natom);
+        return;
+    }
     t_atom *stuff = binbuf_getvec(x->x_binbuf);
     
     for (int n = 0; n<natom; n+=4){
@@ -867,7 +900,7 @@ void setup_fluid0x2eplotter(void){
     sys_vgui("    pack $id.tics -side top\n");
     sys_vgui("    label $id.tics.loutline -text \"Outline:\"\n");
     sys_vgui("    checkbutton $id.tics.outline -variable $var_outline \n");
-    sys_vgui("    label $id.tics.llatch -text \"                Latch Mode:\"\n");//dirty pad
+    sys_vgui("    label $id.tics.llatch -text \"                Mouse Up:\"\n");//dirty pad
     sys_vgui("    checkbutton $id.tics.latch -variable $var_latch \n");
     sys_vgui("    pack $id.tics.loutline $id.tics.outline $id.tics.llatch $id.tics.latch -side left\n");
     sys_vgui("\n");
