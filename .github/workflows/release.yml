@@ -1,6 +1,12 @@
 name: release
 on:
   workflow_dispatch:
+    inputs:
+      upload_to_deken:
+        description: 'Upload to deken'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   macbuild:
@@ -8,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: flucoma/actions/env@main 
-      - uses: flucoma/actions/pd@v5
+      - uses: flucoma/actions/pd@v6
         with:
           branch: origin/${{ github.ref_name }}
 
@@ -124,8 +130,9 @@ jobs:
     runs-on: ubuntu-22.04
     needs: [macbuild, winbuild, linuxbuild]
     steps:
-      - uses: flucoma/actions/deken@v6
+      - uses: flucoma/actions/deken@main
         with:
           version: ${{ needs.linuxbuild.outputs.version }}
           deken_username: ${{ secrets.DEKEN_USERNAME }}
           deken_password: ${{ secrets.DEKEN_PASSWORD }}
+          upload: ${{ inputs.upload_to_deken }}
